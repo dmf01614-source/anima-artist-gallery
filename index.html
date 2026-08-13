@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anima 绘师画廊</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 顶栏 -->
+<header class="topbar">
+  <div class="logo">◆ Anima<span>画廊</span></div>
+
+  <div class="search-box">
+    <input type="text" id="search-input" placeholder="搜索画师 / 输入标签反查…" autocomplete="off" spellcheck="false">
+    <div id="suggest" class="suggest hidden"></div>
+  </div>
+
+  <div class="top-controls">
+    <select id="mode-select" title="搜索模式">
+      <option value="artist">🎨 画师</option>
+      <option value="tag">🏷️ 标签反查</option>
+    </select>
+    <select id="source-select" title="预览数据源">
+      <option value="danbooru">Danbooru</option>
+      <option value="gelbooru">Gelbooru</option>
+    </select>
+    <select id="sort-select" title="排序">
+      <option value="hot">🔥 热度</option>
+      <option value="count">📊 作品数量</option>
+      <option value="name">🔤 名字</option>
+      <option value="random">🎲 随机</option>
+    </select>
+    <button id="multi-btn" class="btn" title="多选模式">☑ 多选</button>
+    <button id="settings-btn" class="btn" title="设置">⚙</button>
+  </div>
+</header>
+
+<!-- 状态栏 -->
+<div class="statusbar" id="statusbar">
+  <span id="status-text">加载数据中…</span>
+</div>
+
+<!-- 画廊网格 -->
+<main class="gallery" id="gallery"></main>
+
+<!-- 加载提示 -->
+<div id="loading" class="loading">
+  <div class="spinner"></div>
+  <div id="loading-text">加载数据中…</div>
+</div>
+
+<!-- 已选侧边栏 -->
+<aside class="drawer hidden" id="drawer">
+  <div class="drawer-head">
+    <span id="drawer-count">已选画师 (0)</span>
+    <button class="drawer-close" id="drawer-close">✕</button>
+  </div>
+  <div class="drawer-list" id="drawer-list"></div>
+  <div class="drawer-actions">
+    <button class="drawer-btn" id="copy-selected">⧉ 一键复制全部</button>
+    <button class="drawer-btn" id="fav-selected">★ 收藏全部</button>
+    <button class="drawer-btn danger" id="clear-selected">🗑 清空所选</button>
+  </div>
+</aside>
+
+<!-- 灯箱 -->
+<div class="lightbox hidden" id="lightbox">
+  <div class="lightbox-img-wrap" id="lightbox-img-wrap">
+    <img id="lightbox-img" src="" alt="">
+  </div>
+  <div class="lightbox-bar">
+    <span id="lightbox-info"></span>
+    <button id="lightbox-close">✕ 关闭</button>
+  </div>
+</div>
+
+<!-- 设置面板 -->
+<div class="modal hidden" id="settings-modal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <span>⚙ 设置</span>
+      <button id="settings-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">填你自己的 API key（存在浏览器本地，不会上传）。留空则用匿名。</p>
+      <label>Danbooru 用户名 (login)</label>
+      <input type="text" id="set-danbooru-login" placeholder="masszxc">
+      <label>Danbooru API Key</label>
+      <input type="text" id="set-danbooru-key" placeholder="Yiq…">
+      <label>Gelbooru API Key</label>
+      <input type="text" id="set-gelbooru-key" placeholder="5303…">
+      <label>Gelbooru User ID</label>
+      <input type="text" id="set-gelbooru-uid" placeholder="2030938">
+      <button class="btn block" id="settings-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast hidden" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
