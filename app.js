@@ -8,8 +8,8 @@ const state = {
   artistIndex: new Map(),      // booruTag -> 数组索引
   index: {},                   // 倒排索引 {tag: {booruTag: count}}
   searchMode: 'artist',        // 'artist' | 'tag'
-  source: 'danbooru',          // 'danbooru' | 'gelbooru'
-  sort: 'hot',
+  source: 'gelbooru',          // 'danbooru' | 'gelbooru'（Gelbooru 能预览，默认用它）
+  sort: 'name-asc',
   multiMode: false,
   selected: new Set(),         // 选中的 booruTag
   favorites: new Set(),        // 收藏的 booruTag
@@ -53,6 +53,9 @@ const els = {
   drawerClose: $('drawer-close'), copySel: $('copy-selected'), favSel: $('fav-selected'), clearSel: $('clear-selected'),
   lightbox: $('lightbox'), lightboxImg: $('lightbox-img'), lightboxWrap: $('lightbox-img-wrap'), lightboxInfo: $('lightbox-info'), lightboxClose: $('lightbox-close'),
   modal: $('settings-modal'), settingsClose: $('settings-close'), settingsSave: $('settings-save'),
+  loadMore: $('load-more'),
+  testDanbooru: $('test-danbooru'), testDanbooruResult: $('test-danbooru-result'),
+  testGelbooru: $('test-gelbooru'), testGelbooruResult: $('test-gelbooru-result'),
   toast: $('toast'),
 };
 
@@ -111,8 +114,10 @@ function searchArtist(q) {
   const matches = [];
   for (const a of state.artists) {
     const d = a.d.toLowerCase();
-    if (d.startsWith(nq) || a.b.toLowerCase().startsWith(lower)) matches.push({ a, score: 0 });
-    else if (d.includes(nq) || a.b.toLowerCase().includes(lower)) matches.push({ a, score: 1 });
+    const m = (a.m || '').toLowerCase();
+    // 原名(d) 和 Danbooru 别名(m) 都能搜到
+    if (d.startsWith(nq) || m.startsWith(nq) || a.b.toLowerCase().startsWith(lower)) matches.push({ a, score: 0 });
+    else if (d.includes(nq) || m.includes(nq) || a.b.toLowerCase().includes(lower)) matches.push({ a, score: 1 });
     if (matches.length >= 200) break;
   }
   matches.sort((x, y) => x.score - y.score);
@@ -139,7 +144,8 @@ function searchTagLocal(tag) {
 function render() {
   let list;
   if (state.searchMode === 'artist') {
-    list = searchArtist(els.search.value) || [];
+    const q = els.search.value.trim();
+    list = q ? searchArtist(q) : state.artists.slice();   // 空搜索 → 默认加载全部画师
     state.resultMode = 'artist';
     state.tagCountMap = {};
   } else {
@@ -151,28 +157,62 @@ function render() {
     list = rl.map(x => state.artists[x.idx]).filter(Boolean);
   }
 
-  // 排序
+  // ========== 排序 ==========
+  // 傻瓜式说明：每个分类都有「正序」(从小到大) 和「倒序」(从大到小)，随机除外
+  // sort 值 = 分类 + 方向：如 'hot-desc' = 热度从高到低，'count-asc' = 作品数从少到多
   const s = state.sort;
-  if (s === 'hot') list.sort((a, b) => (b.h || 0) - (a.h || 0));
-  else if (s === 'count') list.sort((a, b) => (b.n || 0) - (a.n || 0));
-  else if (s === 'name') list.sort((a, b) => a.d.localeCompare(b.d));
-  else if (s === 'random') list = list.slice().sort(() => Math.random() - 0.5);
+  if (s === 'hot-desc') list.sort((a, b) => (b.h || 0) - (a.h || 0));          // 🔥 热度：高 → 低
+  else if (s === 'hot-asc') list.sort((a, b) => (a.h || 0) - (b.h || 0));       // 🔥 热度：低 → 高
+  else if (s === 'count-desc') list.sort((a, b) => (b.n || 0) - (a.n || 0));    // 📊 作品数：多 → 少
+  else if (s === 'count-asc') list.sort((a, b) => (a.n || 0) - (b.n || 0));     // 📊 作品数：少 → 多
+  else if (s === 'tags-desc') list.sort((a, b) => (b.t || 0) - (a.t || 0));     // 🏷️ 标签数：多 → 少
+  else if (s === 'tags-asc') list.sort((a, b) => (a.t || 0) - (b.t || 0));      // 🏷️ 标签数：少 → 多
+  else if (s === 'name-asc') list.sort((a, b) => (a.m || a.d).localeCompare(b.m || b.d));       // 🔤 名字：A → Z
+  else if (s === 'name-desc') list.sort((a, b) => (b.m || a.d).localeCompare(a.m || a.d));      // 🔤 名字：Z → A
+  else if (s === 'random') list = list.slice().sort(() => Math.random() - 0.5); // 🎲 随机：每次乱序
 
   state.results = list;
   setStatus(`显示 ${list.length.toLocaleString()} 位画师`);
   renderGallery(list);
 }
 
+const ROWS_PER_PAGE = 4;
+let visibleCount = 0;
+
+function getColumns() {
+  return Math.max(1, Math.floor(els.gallery.clientWidth / 276));
+}
+
 function renderGallery(list) {
+  state.results = list;
   els.gallery.innerHTML = '';
   if (list.length === 0) {
     els.gallery.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">没有结果</div>';
+    els.loadMore.classList.add('hidden');
     return;
   }
+  visibleCount = 0;
+  renderMore();
+}
+
+function renderMore() {
+  const perPage = getColumns() * ROWS_PER_PAGE;
+  const slice = state.results.slice(visibleCount, visibleCount + perPage);
   const frag = document.createDocumentFragment();
-  for (const a of list.slice(0, 200)) frag.appendChild(buildCard(a));
+  for (const a of slice) frag.appendChild(buildCard(a));
   els.gallery.appendChild(frag);
+  visibleCount += perPage;
+  updateLoadMore();
   observeThumbs();
+}
+
+function updateLoadMore() {
+  if (visibleCount >= state.results.length) {
+    els.loadMore.classList.add('hidden');
+  } else {
+    els.loadMore.classList.remove('hidden');
+    els.loadMore.textContent = `加载更多（已显示 ${visibleCount.toLocaleString()} / ${state.results.length.toLocaleString()}）`;
+  }
 }
 
 function buildCard(a) {
@@ -185,7 +225,7 @@ function buildCard(a) {
   card.innerHTML = `
     <div class="card-head">
       <div class="card-name">
-        <div class="display">${escapeHtml(a.d)}</div>
+        <div class="display">${escapeHtml(a.m || a.d)}</div>
         <div class="anima" data-copy="${escapeAttr(a.a)}" title="点击复制 Anima 调用 id">${escapeHtml(a.a)}</div>
       </div>
       <div class="card-count">${countLabel}</div>
@@ -203,17 +243,15 @@ function buildCard(a) {
 
   // 事件
   card.querySelector('.fav-star').addEventListener('click', e => { e.stopPropagation(); toggleFav(a.b); });
-  card.querySelector('.card-thumbs').addEventListener('click', e => {
-    if (state.multiMode) { toggleSelect(a.b, card); return; }
-    const img = e.target.closest('.thumb img');
-    if (img && img.src) openLightbox(img.dataset.full || img.src, a.d);
-  });
   card.querySelectorAll('[data-copy]').forEach(el => el.addEventListener('click', e => { e.stopPropagation(); copyText(el.dataset.copy); }));
   card.querySelector('[data-danbooru]').addEventListener('click', e => { e.stopPropagation(); window.open('https://danbooru.donmai.us/posts?tags=' + encodeURIComponent(a.b), '_blank'); });
   card.querySelector('[data-gelbooru]').addEventListener('click', e => { e.stopPropagation(); window.open('https://gelbooru.com/index.php?page=post&s=list&tags=' + encodeURIComponent(a.b), '_blank'); });
 
-  card.addEventListener('click', () => {
-    if (state.multiMode) toggleSelect(a.b, card);
+  // 单点卡片：点缩略图=灯箱，点其他区域=选中
+  card.addEventListener('click', e => {
+    const img = e.target.closest('.thumb img');
+    if (img && img.src) { openLightbox(img.dataset.full || img.src, a.d); return; }
+    toggleSelect(a.b, card);
   });
 
   return card;
@@ -235,16 +273,28 @@ function observeThumbs() {
       }
     }
   }, { rootMargin: '200px' });
-  document.querySelectorAll('.card-thumbs').forEach(t => thumbObserver.observe(t));
+  document.querySelectorAll('.card-thumbs:not([data-loaded])').forEach(t => thumbObserver.observe(t));
+}
+
+// 图片走本地代理（绕过 Gelbooru referer 防盗链）
+// 轮换端口：浏览器对每个端口(origin)只有 6 个并发连接，轮换 6 个端口 = 36 并发，图片加载提速数倍
+const PROXY_PORTS = [8765, 8766, 8767, 8768, 8769, 8770];
+let proxyCounter = 0;
+function proxyUrl(url) {
+  if (!url) return url;
+  const port = PROXY_PORTS[proxyCounter++ % PROXY_PORTS.length];
+  return `http://127.0.0.1:${port}/proxy?url=${encodeURIComponent(url)}`;
 }
 
 async function loadThumbs(booru, container) {
+  if (container.dataset.loaded) return;   // 已加载过就跳过（防止重复请求 API）
+  container.dataset.loaded = '1';
   const posts = await fetchPosts(booru, 5);
   const thumbs = container.querySelectorAll('.thumb');
   posts.forEach((p, i) => {
     if (i >= thumbs.length) return;
     const img = document.createElement('img');
-    img.src = p.preview;
+    img.src = proxyUrl(p.preview);
     img.dataset.full = p.full;
     img.loading = 'lazy';
     thumbs[i].innerHTML = '';
@@ -252,25 +302,23 @@ async function loadThumbs(booru, container) {
   });
 }
 
+const postsCache = new Map();   // 作品查询缓存：key -> posts，避免滚动/重渲染重复打 API
 async function fetchPosts(booru, limit = 5) {
-  const cred = getApiCred();
+  const s = state.settings;
+  // 用户自己的 key 传给本地服务器（不内置在服务器里）
+  const params = new URLSearchParams({ booru, limit, source: state.source });
+  if (s.gbKey) params.set('gb_key', s.gbKey);
+  if (s.gbUid) params.set('gb_uid', s.gbUid);
+  if (s.dbLogin) params.set('db_login', s.dbLogin);
+  if (s.dbKey) params.set('db_key', s.dbKey);
+  const cacheKey = `${state.source}:${booru}:${limit}`;
+  if (postsCache.has(cacheKey)) return postsCache.get(cacheKey);
   try {
-    if (state.source === 'danbooru') {
-      const url = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(booru)}&limit=${limit}${cred.db}`;
-      const r = await fetch(url);
-      const posts = await r.json();
-      return posts.map(p => ({ preview: p.preview_file_url, full: p.large_file_url || p.file_url }));
-    } else {
-      const url = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(booru)}&limit=${limit}${cred.gb}`;
-      const r = await fetch(url);
-      const data = await r.json();
-      const posts = (data && data.post) ? (Array.isArray(data.post) ? data.post : [data.post]) : [];
-      return posts.map(p => {
-        const thumb = p.preview_url || `https://img3.gelbooru.com/thumbnails/${p.directory}/thumbnail_${p.image}`;
-        const full = p.file_url || `https://img3.gelbooru.com/images/${p.directory}/${p.image}`;
-        return { preview: thumb, full };
-      });
-    }
+    const r = await fetch(`/api/posts?${params.toString()}`);
+    const data = await r.json();
+    const posts = Array.isArray(data) ? data : [];
+    postsCache.set(cacheKey, posts);
+    return posts;
   } catch (e) {
     return [];
   }
@@ -280,7 +328,7 @@ async function fetchPosts(booru, limit = 5) {
 let lbScale = 1, lbTx = 0, lbTy = 0;
 function openLightbox(url, name) {
   els.lightbox.classList.remove('hidden');
-  els.lightboxImg.src = url;
+  els.lightboxImg.src = proxyUrl(url);
   els.lightboxInfo.textContent = name || '';
   lbScale = 1; lbTx = 0; lbTy = 0;
   applyLb();
@@ -289,17 +337,21 @@ function applyLb() {
   els.lightboxImg.style.transform = `translate(${lbTx}px, ${lbTy}px) scale(${lbScale})`;
 }
 els.lightboxClose.addEventListener('click', () => els.lightbox.classList.add('hidden'));
-els.lightbox.addEventListener('click', e => { if (e.target === els.lightbox) els.lightbox.classList.add('hidden'); });
+// 灯箱：点击空白处自动退出——点背景或图片周围的空白都关；点图片本身不关（要拖动/缩放）；刚拖动过不关
+els.lightbox.addEventListener('click', e => {
+  if (dragged) return;
+  if (e.target === els.lightbox || e.target === els.lightboxWrap) els.lightbox.classList.add('hidden');
+});
 els.lightboxWrap.addEventListener('wheel', e => {
   e.preventDefault();
   lbScale = Math.min(4, Math.max(0.5, lbScale * (e.deltaY < 0 ? 1.15 : 0.87)));
   applyLb();
 });
-// 拖动平移
-let dragging = false, sx = 0, sy = 0;
-els.lightboxWrap.addEventListener('mousedown', e => { dragging = true; sx = e.clientX - lbTx; sy = e.clientY - lbTy; });
-window.addEventListener('mousemove', e => { if (dragging) { lbTx = e.clientX - sx; lbTy = e.clientY - sy; applyLb(); } });
-window.addEventListener('mouseup', () => dragging = false);
+// 拖动平移（注意：拖动后松手会触发 click，要标记 dragged 避免误关灯箱）
+let dragging = false, dragged = false, sx = 0, sy = 0;
+els.lightboxWrap.addEventListener('mousedown', e => { dragging = true; dragged = false; sx = e.clientX - lbTx; sy = e.clientY - lbTy; });
+window.addEventListener('mousemove', e => { if (dragging) { lbTx = e.clientX - sx; lbTy = e.clientY - sy; if (Math.abs(lbTx) + Math.abs(lbTy) > 3) dragged = true; applyLb(); } });
+window.addEventListener('mouseup', () => { dragging = false; setTimeout(() => { dragged = false; }, 0); });
 els.lightboxWrap.addEventListener('dblclick', () => { lbScale = lbScale === 1 ? 2 : 1; lbTx = 0; lbTy = 0; applyLb(); });
 
 // ========== 多选 ==========
@@ -308,21 +360,28 @@ function toggleSelect(booru, card) {
   else { state.selected.add(booru); }
   if (card) card.classList.toggle('selected', state.selected.has(booru));
   renderDrawer();
+  updateDrawer();
 }
 
+function updateDrawer() {
+  const show = state.selected.size > 0;
+  els.drawer.classList.toggle('hidden', !show);
+  document.body.classList.toggle('drawer-open', show);
+}
+
+// 多选按钮改为「清空所选」
 els.multi.addEventListener('click', () => {
-  state.multiMode = !state.multiMode;
-  els.multi.classList.toggle('active', state.multiMode);
-  els.drawer.classList.toggle('hidden', !state.multiMode);
-  setStatus(state.multiMode ? '多选模式：点击卡片选中画师' : '');
+  state.selected.clear();
+  syncCards();
+  renderDrawer();
+  updateDrawer();
 });
 
 els.drawerClose.addEventListener('click', () => {
-  state.multiMode = false;
-  els.multi.classList.remove('active');
-  els.drawer.classList.add('hidden');
-  document.querySelectorAll('.card.selected').forEach(c => c.classList.remove('selected'));
   state.selected.clear();
+  syncCards();
+  renderDrawer();
+  updateDrawer();
 });
 
 function renderDrawer() {
@@ -344,7 +403,7 @@ function renderDrawer() {
     item.querySelector('[data-remove]').addEventListener('click', () => { state.selected.delete(a.b); renderDrawer(); syncCards(); });
     els.drawerList.appendChild(item);
     // 加载缩略图
-    fetchPosts(a.b, 1).then(posts => { if (posts[0]) item.querySelector('.di-thumb').src = posts[0].preview; });
+    fetchPosts(a.b, 1).then(posts => { if (posts[0]) item.querySelector('.di-thumb').src = proxyUrl(posts[0].preview); });
   }
 }
 
@@ -375,6 +434,11 @@ function toggleFav(booru) {
   saveFavorites();
   syncCards();
   renderDrawer();
+  // 同步所有卡片上的星星按钮视觉状态（否则点了星星不变）
+  const on = state.favorites.has(booru);
+  document.querySelectorAll('.fav-star').forEach(btn => {
+    if (btn.dataset.fav === booru) { btn.classList.toggle('on', on); btn.textContent = on ? '★' : '☆'; }
+  });
 }
 function saveFavorites() {
   localStorage.setItem('favorites', JSON.stringify([...state.favorites]));
@@ -397,6 +461,7 @@ els.settingsSave.addEventListener('click', () => {
     gbUid: $('set-gelbooru-uid').value.trim(),
   };
   localStorage.setItem('settings', JSON.stringify(state.settings));
+  postsCache.clear();  // key 可能变了，清缓存让新 key 生效
   els.modal.classList.add('hidden');
   toast('设置已保存（仅存于本机浏览器）');
 });
@@ -417,7 +482,7 @@ els.search.addEventListener('keydown', e => { if (e.key === 'Enter') { els.sugge
 
 function renderSuggest(list) {
   if (list.length === 0) { els.suggest.classList.add('hidden'); return; }
-  els.suggest.innerHTML = list.map(a => `<div class="suggest-item" data-booru="${escapeAttr(a.b)}"><span class="tag-name">${escapeHtml(a.d)}</span></div>`).join('');
+  els.suggest.innerHTML = list.map(a => `<div class="suggest-item" data-booru="${escapeAttr(a.b)}"><span class="tag-name">${escapeHtml(a.m || a.d)}</span></div>`).join('');
   els.suggest.classList.remove('hidden');
   els.suggest.querySelectorAll('.suggest-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -439,8 +504,45 @@ document.addEventListener('click', e => { if (!e.target.closest('.search-box')) 
 
 // ========== 控件事件 ==========
 els.mode.addEventListener('change', () => { state.searchMode = els.mode.value; render(); });
-els.source.addEventListener('change', () => { state.source = els.source.value; });
+els.source.addEventListener('change', () => { state.source = els.source.value; postsCache.clear(); render(); });
 els.sort.addEventListener('change', () => { state.sort = els.sort.value; render(); });
+els.loadMore.addEventListener('click', () => renderMore());
+
+async function testApi(source) {
+  const resultEl = source === 'danbooru' ? els.testDanbooruResult : els.testGelbooruResult;
+  resultEl.textContent = '测试中…';
+  resultEl.style.color = '';
+  try {
+    const s = state.settings;
+    const params = new URLSearchParams({ booru: 'ask_(askzy)', limit: 1, source });
+    if (s.gbKey) params.set('gb_key', s.gbKey);
+    if (s.gbUid) params.set('gb_uid', s.gbUid);
+    if (s.dbLogin) params.set('db_login', s.dbLogin);
+    if (s.dbKey) params.set('db_key', s.dbKey);
+    const r = await fetch(`/api/posts?${params.toString()}`);
+    const data = await r.json();
+    if (Array.isArray(data) && data.length > 0) {
+      resultEl.textContent = '✅ 可用';
+      resultEl.style.color = '#4ade80';
+    } else if (data && data.error) {
+      resultEl.textContent = '❌ ' + data.error;
+      resultEl.style.color = '#f87171';
+    } else {
+      resultEl.textContent = '❌ 返回空';
+      resultEl.style.color = '#f87171';
+    }
+  } catch (e) {
+    resultEl.textContent = '❌ ' + e.message;
+    resultEl.style.color = '#f87171';
+  }
+}
+els.testDanbooru.addEventListener('click', () => testApi('danbooru'));
+els.testGelbooru.addEventListener('click', () => testApi('gelbooru'));
 
 // ========== 启动 ==========
 loadData();
+// 心跳：每 15 秒告诉服务器「页面还开着」。
+// 服务器超过 2 分钟没收到心跳就自动退出（用户已关闭网页）。
+// 刷新页面会立刻发新心跳，不会误杀。
+fetch('/heartbeat').catch(() => {});
+setInterval(() => fetch('/heartbeat').catch(() => {}), 15000);

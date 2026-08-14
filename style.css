@@ -90,25 +90,26 @@ body {
 
 .card-head { display: flex; align-items: flex-start; gap: 8px; }
 .card-name { flex: 1; min-width: 0; }
-.card-name .display { font-weight: 700; font-size: 15px; word-break: break-word; }
+.card-name .display { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-name .anima {
   font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 11px; color: var(--muted); word-break: break-all; margin-top: 2px;
+  font-size: 11px; color: var(--muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer;
 }
 .card-name .anima:hover { color: var(--accent2); }
-.card-count { font-size: 11px; color: var(--accent2); white-space: nowrap; }
-.fav-star { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+.card-count { font-size: 11px; color: var(--accent2); white-space: nowrap; flex-shrink: 0; }
+.fav-star { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; flex-shrink: 0; }
 .fav-star.on { color: var(--star); }
 
-.card-thumbs { display: grid; grid-template-columns: 2fr 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; }
+.card-thumbs { display: grid; grid-template-columns: 2fr 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; aspect-ratio: 2 / 1; }
 .thumb {
   position: relative; overflow: hidden; border-radius: 4px; background: var(--bg2);
   aspect-ratio: 1; cursor: zoom-in;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.18s; }
 .thumb:hover img { transform: scale(1.18); }
-.thumb.main { grid-row: span 2; aspect-ratio: auto; }
+.thumb.main { grid-row: span 2; aspect-ratio: 1; }
 .thumb .placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 11px; }
 
 .card-actions { display: flex; gap: 6px; }
@@ -125,6 +126,13 @@ body {
   position: fixed; top: 0; right: 0; bottom: 0; width: 320px; z-index: 60;
   background: var(--card2); border-left: 1px solid var(--border);
   display: flex; flex-direction: column; box-shadow: -8px 0 30px rgba(0,0,0,0.5);
+  transition: transform 0.2s ease;
+}
+/* 侧边栏挤压主页面 */
+body.drawer-open .gallery,
+body.drawer-open .load-more {
+  margin-right: 320px;
+  transition: margin-right 0.2s ease;
 }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .drawer-head span { font-weight: 700; }
@@ -169,6 +177,22 @@ body {
 .modal-body input { width: 100%; padding: 9px 12px; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 13px; outline: none; }
 .modal-body input:focus { border-color: var(--accent); }
 .btn.block { width: 100%; margin-top: 16px; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+.load-more { display: block; margin: 18px auto; padding: 11px 32px; background: var(--card2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-size: 14px; cursor: pointer; }
+.load-more:hover { border-color: var(--accent); }
+.test-btn { margin-left: 8px; padding: 7px 12px; background: var(--card); color: var(--accent); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; }
+.test-btn:hover { border-color: var(--accent); }
+.test-result { display: inline-block; margin-left: 8px; font-size: 12px; }
+/* 测试按钮行：测试按钮 + 获取Key链接 + 结果横排 */
+.test-row { display: flex; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
+.test-row .test-btn { margin-left: 0; }
+.getkey-link { margin-left: 10px; padding: 7px 12px; color: var(--accent); border: 1px dashed var(--border); border-radius: 6px; font-size: 12px; text-decoration: none; cursor: pointer; }
+.getkey-link:hover { border-color: var(--accent); background: rgba(0, 180, 255, 0.08); }
+/* 获取 Key 的注释说明（教用户步骤） */
+.help-note { margin: 8px 0 12px; padding: 10px 12px; background: rgba(0, 180, 255, 0.06); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+.help-note b { color: #e2e8f0; }
+.help-note ul { margin: 6px 0 0; padding-left: 18px; }
+.help-note a { color: var(--accent); text-decoration: none; }
+.help-note a:hover { text-decoration: underline; }
 
 /* ===== Toast ===== */
 .toast {

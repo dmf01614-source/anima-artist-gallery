@@ -24,15 +24,20 @@
     </select>
     <select id="source-select" title="预览数据源">
       <option value="danbooru">Danbooru</option>
-      <option value="gelbooru">Gelbooru</option>
+      <option value="gelbooru" selected>Gelbooru</option>
     </select>
     <select id="sort-select" title="排序">
-      <option value="hot">🔥 热度</option>
-      <option value="count">📊 作品数量</option>
-      <option value="name">🔤 名字</option>
+      <option value="name-asc" selected>🔤 名字 A→Z</option>
+      <option value="name-desc">🔤 名字 Z→A</option>
+      <option value="hot-desc">🔥 热度 高→低</option>
+      <option value="hot-asc">🔥 热度 低→高</option>
+      <option value="count-desc">📊 作品数 多→少</option>
+      <option value="count-asc">📊 作品数 少→多</option>
+      <option value="tags-desc">🏷️ 标签数 多→少</option>
+      <option value="tags-asc">🏷️ 标签数 少→多</option>
       <option value="random">🎲 随机</option>
     </select>
-    <button id="multi-btn" class="btn" title="多选模式">☑ 多选</button>
+    <button id="multi-btn" class="btn" title="清空所选">🗑 清空</button>
     <button id="settings-btn" class="btn" title="设置">⚙</button>
   </div>
 </header>
@@ -44,6 +49,9 @@
 
 <!-- 画廊网格 -->
 <main class="gallery" id="gallery"></main>
+
+<!-- 加载更多 -->
+<button id="load-more" class="btn block load-more hidden">加载更多</button>
 
 <!-- 加载提示 -->
 <div id="loading" class="loading">
@@ -84,15 +92,33 @@
       <button id="settings-close">✕</button>
     </div>
     <div class="modal-body">
-      <p class="modal-hint">填你自己的 API key（存在浏览器本地，不会上传）。留空则用匿名。</p>
+      <p class="modal-hint">API 查询和图片都走本地服务器代理。<b>请填写你自己的 API Key</b>（只保存在本机浏览器，不会上传）。Gelbooru 必填；Danbooru 可留空（匿名可用）或填写以提升额度。</p>
+      <div class="help-note">
+        <b>🔑 如何获取自己的 API Key：</b>
+        <ul>
+          <li><b>Danbooru</b>：登录后打开<a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener">个人资料页 ↗</a>，点「API Key」旁的 <b>View</b> 即可查看</li>
+          <li><b>Gelbooru</b>：登录后打开<a href="https://gelbooru.com/index.php?page=account&s=home" target="_blank" rel="noopener">账号主页 ↗</a>，进入 <b>Options</b> 页面可查看 API Key</li>
+          <li>Key 只保存在<b>本机浏览器</b>，用于查询作品数据，请勿泄露给他人</li>
+        </ul>
+      </div>
       <label>Danbooru 用户名 (login)</label>
       <input type="text" id="set-danbooru-login" placeholder="masszxc">
       <label>Danbooru API Key</label>
       <input type="text" id="set-danbooru-key" placeholder="Yiq…">
+      <div class="test-row">
+        <button class="test-btn" id="test-danbooru">测试 Danbooru</button>
+        <a class="getkey-link" href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener">获取 Key ↗</a>
+        <span class="test-result" id="test-danbooru-result"></span>
+      </div>
       <label>Gelbooru API Key</label>
       <input type="text" id="set-gelbooru-key" placeholder="5303…">
       <label>Gelbooru User ID</label>
       <input type="text" id="set-gelbooru-uid" placeholder="2030938">
+      <div class="test-row">
+        <button class="test-btn" id="test-gelbooru">测试 Gelbooru</button>
+        <a class="getkey-link" href="https://gelbooru.com/index.php?page=account&s=home" target="_blank" rel="noopener">获取 Key ↗</a>
+        <span class="test-result" id="test-gelbooru-result"></span>
+      </div>
       <button class="btn block" id="settings-save">保存</button>
     </div>
   </div>
