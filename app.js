@@ -84,12 +84,24 @@ function getApiCred() {
 }
 
 // ========== 数据加载 ==========
+// 标签索引按首字母分片（index-a.json ~ index-z.json + index-0.json + index-other.json）：
+// Cloudflare Pages 单文件限 25MB，拆分后每个 ~1MB，还能并行加载提速
+const INDEX_CHUNKS = [...'abcdefghijklmnopqrstuvwxyz', '0', 'other'];
+async function loadIndex() {
+  const chunks = await Promise.all(INDEX_CHUNKS.map(c =>
+    fetch(`index-${c}.json`).then(r => r.json()).catch(() => ({}))
+  ));
+  const idx = {};
+  for (const chunk of chunks) Object.assign(idx, chunk);
+  return idx;
+}
+
 async function loadData() {
   try {
     els.loadingText.textContent = '加载画师数据…';
     const [artistsData, indexData] = await Promise.all([
       fetch('artists-data.json').then(r => r.json()),
-      fetch('index.json').then(r => r.json()),
+      loadIndex(),
     ]);
     state.artists = artistsData;
     state.index = indexData;
@@ -277,13 +289,18 @@ function observeThumbs() {
 }
 
 // 图片走本地代理（绕过 Gelbooru referer 防盗链）
-// 轮换端口：浏览器对每个端口(origin)只有 6 个并发连接，轮换 6 个端口 = 36 并发，图片加载提速数倍
+// 本地运行(127.0.0.1)：轮换 6 个端口 = 36 并发提速
+// 在线部署(pages.dev等)：走相对路径 /proxy，由 Cloudflare Pages Functions 处理
 const PROXY_PORTS = [8765, 8766, 8767, 8768, 8769, 8770];
 let proxyCounter = 0;
+const IS_LOCAL = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
 function proxyUrl(url) {
   if (!url) return url;
-  const port = PROXY_PORTS[proxyCounter++ % PROXY_PORTS.length];
-  return `http://127.0.0.1:${port}/proxy?url=${encodeURIComponent(url)}`;
+  if (IS_LOCAL) {
+    const port = PROXY_PORTS[proxyCounter++ % PROXY_PORTS.length];
+    return `http://127.0.0.1:${port}/proxy?url=${encodeURIComponent(url)}`;
+  }
+  return `/proxy?url=${encodeURIComponent(url)}`;
 }
 
 async function loadThumbs(booru, container) {
